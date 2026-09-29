@@ -1,0 +1,49 @@
+// Validation boundaries for booking, cancelling, and calendar queries.
+// What calls this file: appointment and staff availability route handlers.
+// What it calls: Zod only.
+// Junior pitfall: letting date strings through and then discovering bad ranges deep in the service.
+
+import { z } from "zod";
+
+export const bookAppointmentSchema = z.object({
+  staffProfileId: z.string().trim().min(1),
+  startsAt: z.string().datetime({ offset: true }),
+});
+
+export const cancelAppointmentSchema = z.object({
+  cancellationReason: z.string().trim().min(1).max(500).optional(),
+});
+
+export const availabilityQuerySchema = z.object({
+  staffProfileId: z.string().trim().min(1),
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+export const listAppointmentsQuerySchema = z.object({
+  scope: z.enum(["mine", "all"]).optional(),
+});
+
+export const createWorkingHoursRuleSchema = z
+  .object({
+    staffProfileId: z.string().trim().min(1),
+    dayOfWeek: z.number().int().min(0).max(6),
+    startMinute: z.number().int().min(0).max(1439),
+    endMinute: z.number().int().min(1).max(1440),
+    active: z.boolean().optional(),
+  })
+  .refine((value) => value.endMinute > value.startMinute, {
+    message: "Working hours must end after they start",
+    path: ["endMinute"],
+  });
+
+export const createStaffMemberSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).max(120),
+  displayName: z.string().min(1).max(120),
+  timezone: z.string().min(1).max(128),
+  appointmentDurationMinutes: z.number().int().min(15).max(240),
+  password: z.string().min(8).max(128),
+});
+
+export const bookAppointmentCommandSchema = bookAppointmentSchema.extend({ startsAt: z.date() });

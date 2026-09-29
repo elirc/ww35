@@ -1,0 +1,21 @@
+{
+  "project": "_Organized Desktop/05 Numbered Experiments/ww35",
+  "id": "32d4e2fef457",
+  "command": [
+    "npm.cmd",
+    "run",
+    "build"
+  ],
+  "cwd": "C:\\Users\\Owner\\Desktop\\AstraOrganized2\\astra-remaining-improvements\\stage\\32d4e2fef457",
+  "environmentOverrides": {
+    "DATABASE_URL": "postgresql://check:check@127.0.0.1:1/check"
+  },
+  "startedAt": "2026-09-19T18:32:17.731812+00:00",
+  "status": "complete",
+  "log": "resume14-build-02.log",
+  "pid": 16376,
+  "exitCode": 0,
+  "passed": true,
+  "finishedAt": "2026-09-19T18:48:49.110200+00:00",
+  "elapsedSeconds": 991.36
+}

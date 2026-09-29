@@ -1,0 +1,108 @@
+// Appointment booking domain schema.
+// What calls this file: Prisma Client generation and the migration SQL in prisma/migrations/0001_initial/migration.sql.
+// What it calls: the app's repositories in src/repositories/*.ts use the generated Prisma types and model names.
+// Junior pitfall: encoding overlapping-time logic in a unique index instead of a range-based constraint.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  CLIENT
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CANCELLED
+}
+
+model User {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  name            String
+  role            Role
+  passwordHash    String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  sessions        Session[]
+  staffProfile    StaffProfile?
+  clientAppointments Appointment[] @relation("ClientAppointments")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model StaffProfile {
+  id                         String             @id @default(cuid())
+  userId                     String             @unique
+  displayName                String
+  timezone                   String             @default("America/Los_Angeles")
+  appointmentDurationMinutes  Int                @default(30)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workingHoursRules          WorkingHoursRule[]
+  timeOffBlocks              TimeOffBlock[]
+  appointments               Appointment[]
+}
+
+model WorkingHoursRule {
+  id             String       @id @default(cuid())
+  staffProfileId  String
+  dayOfWeek      Int
+  startMinute    Int
+  endMinute      Int
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, dayOfWeek])
+}
+
+model TimeOffBlock {
+  id             String       @id @default(cuid())
+  staffProfileId  String
+  startsAt       DateTime
+  endsAt         DateTime
+  reason         String?
+  createdAt      DateTime     @default(now())
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@index([staffProfileId, startsAt, endsAt])
+}
+
+model Appointment {
+  id             String             @id @default(cuid())
+  staffProfileId  String
+  clientId       String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         AppointmentStatus  @default(BOOKED)
+  cancellationReason String?
+  cancelledAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  staffProfile   StaffProfile       @relation(fields: [staffProfileId], references: [id], onDelete: Restrict)
+  client         User               @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([staffProfileId, startsAt, endsAt])
+  @@index([clientId, startsAt])
+}

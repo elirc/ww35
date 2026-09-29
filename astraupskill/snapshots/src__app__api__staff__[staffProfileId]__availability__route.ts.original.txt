@@ -1,0 +1,25 @@
+// Staff availability calendar endpoint.
+// What calls this file: the dashboard calendar view and booking form.
+// What it calls: withAuth and the availability service.
+// Junior pitfall: returning booked slots without the underlying staff timezone.
+
+import { jsonResponse } from "@/lib/http";
+import { withAuth } from "@/lib/auth/with-auth";
+import { availabilityQuerySchema } from "@/lib/validation/appointmentSchemas";
+import { getStaffAvailability } from "@/services/availabilityService";
+
+export const GET = withAuth(async (request, context, actor) => {
+  const params = availabilityQuerySchema.parse({
+    staffProfileId: context.params.staffProfileId,
+    from: request.nextUrl.searchParams.get("from"),
+    to: request.nextUrl.searchParams.get("to"),
+  });
+
+  const slots = await getStaffAvailability(actor, {
+    staffProfileId: params.staffProfileId,
+    from: new Date(params.from),
+    to: new Date(params.to),
+  });
+
+  return jsonResponse({ slots });
+});

@@ -1,0 +1,190 @@
+// Appointment read/write persistence.
+// What calls this file: appointmentService and appointment route handlers.
+// What it calls: Prisma queries on Appointment and related tables.
+// Junior pitfall: forgetting the overlap predicate or the owner scope on one query path.
+
+import { prisma } from "@/lib/db";
+import { buildAppointmentListWhere } from "@/lib/data/appointmentScopes";
+import type { RequestActor } from "@/types/domain";
+
+export async function findAppointmentById(id: string) {
+  return prisma.appointment.findUnique({
+    where: { id },
+    include: {
+      staffProfile: {
+        select: {
+          id: true,
+          displayName: true,
+          timezone: true,
+          appointmentDurationMinutes: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}
+
+export async function findScopedAppointmentById(actor: RequestActor, id: string) {
+  return prisma.appointment.findFirst({
+    where: {
+      id,
+      ...buildAppointmentListWhere(actor),
+    },
+    include: {
+      staffProfile: {
+        select: {
+          id: true,
+          displayName: true,
+          timezone: true,
+          appointmentDurationMinutes: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}
+
+export async function listAppointmentsForActor(actor: RequestActor) {
+  return prisma.appointment.findMany({
+    where: buildAppointmentListWhere(actor),
+    include: {
+      staffProfile: {
+        select: {
+          id: true,
+          displayName: true,
+          timezone: true,
+          appointmentDurationMinutes: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+    orderBy: { startsAt: "asc" },
+  });
+}
+
+export async function findConflictingAppointment(input: {
+  staffProfileId: string;
+  startsAt: Date;
+  endsAt: Date;
+  excludeAppointmentId?: string;
+}) {
+  return prisma.appointment.findFirst({
+    where: {
+      staffProfileId: input.staffProfileId,
+      status: "BOOKED",
+      ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
+      startsAt: { lt: input.endsAt },
+      endsAt: { gt: input.startsAt },
+    },
+    include: {
+      staffProfile: {
+        select: {
+          id: true,
+          displayName: true,
+          timezone: true,
+          appointmentDurationMinutes: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}
+
+export async function createAppointment(input: {
+  staffProfileId: string;
+  clientId: string;
+  startsAt: Date;
+  endsAt: Date;
+}) {
+  return prisma.appointment.create({
+    data: input,
+    include: {
+      staffProfile: {
+        select: {
+          id: true,
+          displayName: true,
+          timezone: true,
+          appointmentDurationMinutes: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}
+
+export async function cancelAppointment(actor: RequestActor, input: {
+  appointmentId: string;
+  cancellationReason?: string | null;
+}) {
+  const result = await prisma.appointment.updateMany({
+    where: { id: input.appointmentId, ...buildAppointmentListWhere(actor), status: "BOOKED" },
+    data: { status: "CANCELLED", cancellationReason: input.cancellationReason ?? null, cancelledAt: new Date() },
+  });
+  if (result.count !== 1) return null;
+  return findScopedAppointmentById(actor, input.appointmentId);
+}
+
+export async function listAppointmentsInWindow(staffProfileId: string, from: Date, to: Date) {
+  return prisma.appointment.findMany({
+    where: {
+      staffProfileId,
+      status: "BOOKED",
+      startsAt: { lt: to },
+      endsAt: { gt: from },
+    },
+    orderBy: { startsAt: "asc" },
+    include: {
+      staffProfile: {
+        select: {
+          id: true,
+          displayName: true,
+          timezone: true,
+          appointmentDurationMinutes: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}

@@ -1,0 +1,38 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { RequestActor } from "@/types/domain";
+
+const actor: RequestActor = {
+  sessionId: "session_1",
+  userId: "user_1",
+  email: "client@acme.test",
+  name: "Client",
+  role: "CLIENT",
+  staffProfileId: null,
+};
+
+vi.mock("@/services/authService", () => ({
+  getActorFromRequest: vi.fn(async () => actor),
+}));
+
+import { withRole } from "@/lib/auth/with-role";
+import { jsonResponse } from "@/lib/http";
+
+describe("permission enforcement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a client calling an admin-only route with 403", async () => {
+    // This protects an admin endpoint from relying on the UI to hide access.
+    const handler = withRole(["ADMIN"], async () => jsonResponse({ ok: true }));
+    const response = await handler(new Request("http://localhost") as never, { params: Promise.resolve({}) });
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+      },
+    });
+  });
+});

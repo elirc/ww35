@@ -1,0 +1,19 @@
+// Cancellation endpoint for a single appointment.
+// What calls this file: the appointment list item action in the dashboard.
+// What it calls: withAuth and the appointment cancellation service.
+// Junior pitfall: allowing the UI to hide the cancel button but not enforcing ownership on the server.
+
+import { jsonResponse } from "@/lib/http";
+import { withAuth } from "@/lib/auth/with-auth";
+import { readJsonBody } from "@/lib/http/request";
+import { cancelAppointmentSchema } from "@/lib/validation/appointmentSchemas";
+import { cancelAppointment } from "@/services/appointmentService";
+
+export const POST = withAuth(async (request, context, actor) => {
+  const body = cancelAppointmentSchema.parse(await readJsonBody(request));
+  const appointment = await cancelAppointment(actor, context.params.appointmentId, {
+    cancellationReason: body.cancellationReason,
+  });
+
+  return jsonResponse({ appointment });
+});

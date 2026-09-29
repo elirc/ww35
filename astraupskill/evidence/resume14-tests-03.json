@@ -1,0 +1,24 @@
+{
+  "project": "_Organized Desktop/05 Numbered Experiments/ww35",
+  "id": "32d4e2fef457",
+  "command": [
+    "npm.cmd",
+    "test",
+    "--",
+    "--pool",
+    "threads",
+    "--poolOptions.threads.singleThread",
+    "--testTimeout",
+    "30000"
+  ],
+  "cwd": "C:\\Users\\Owner\\Desktop\\AstraOrganized2\\astra-remaining-improvements\\stage\\32d4e2fef457",
+  "environmentOverrides": {},
+  "startedAt": "2026-09-19T18:30:30.900021+00:00",
+  "status": "complete",
+  "log": "resume14-tests-03.log",
+  "pid": 6372,
+  "exitCode": 0,
+  "passed": true,
+  "finishedAt": "2026-09-19T18:31:20.579025+00:00",
+  "elapsedSeconds": 49.68
+}

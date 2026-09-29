@@ -1,0 +1,11 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+const deps=vi.hoisted(()=>({actor:vi.fn(),cancel:vi.fn()}));
+vi.mock("@/services/authService",()=>({getActorFromRequest:deps.actor}));
+vi.mock("@/services/appointmentService",()=>({cancelAppointment:deps.cancel}));
+import { POST } from "@/app/api/appointments/[appointmentId]/cancel/route";
+const actor={userId:"client",role:"CLIENT",staffProfileId:null,email:"c@test.com",name:"Client",sessionId:"s"};
+const request=(body:unknown)=>new NextRequest("http://localhost/api/appointments/book/cancel",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+beforeEach(()=>{vi.resetAllMocks();deps.actor.mockResolvedValue(actor);deps.cancel.mockResolvedValue({id:"book",status:"CANCELLED"});});
+it("the real cancellation route awaits dynamic params and passes the session actor",async()=>{const response=await POST(request({cancellationReason:"  changed plans  "}),{params:Promise.resolve({appointmentId:"book"})});expect(response.status).toBe(200);expect(deps.cancel).toHaveBeenCalledWith(actor,"book",{cancellationReason:"changed plans"});});
+it("malformed fields are 400 before service and missing session is 401",async()=>{expect((await POST(request({cancellationReason:" "}),{params:Promise.resolve({appointmentId:"book"})})).status).toBe(400);expect(deps.cancel).not.toHaveBeenCalled();deps.actor.mockResolvedValue(null);expect((await POST(request({}),{params:Promise.resolve({appointmentId:"book"})})).status).toBe(401);expect(deps.cancel).not.toHaveBeenCalled();});

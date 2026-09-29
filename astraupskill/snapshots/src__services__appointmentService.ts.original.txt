@@ -1,0 +1,124 @@
+// Appointment workflow service.
+// What calls this file: appointment route handlers and cancellation actions.
+// What it calls: appointment, staff, and availability repositories plus the shared slot calculator.
+// Junior pitfall: checking for conflicts only after the insert and assuming the database will never race.
+
+import { ConflictAppError, ForbiddenAppError, InvalidTransitionAppError, NotFoundAppError, ValidationAppError } from "@/lib/errors";
+import { requireRole } from "@/lib/auth/permissions";
+import { findAppointmentById, findConflictingAppointment, findScopedAppointmentById, listAppointmentsForActor, createAppointment, cancelAppointment as cancelAppointmentRecord } from "@/repositories/appointmentRepository";
+import { findStaffProfileById } from "@/repositories/staffRepository";
+import { canBookSlot } from "@/services/availabilityService";
+import type { RequestActor } from "@/types/domain";
+
+function ensureCancelable(actor: RequestActor, appointment: Awaited<ReturnType<typeof findAppointmentById>>) {
+  if (!appointment) {
+    throw new NotFoundAppError("Appointment not found");
+  }
+
+  if (appointment.status === "CANCELLED") {
+    throw new InvalidTransitionAppError("Cancelled appointments cannot be cancelled again");
+  }
+
+  const ownsIt = actor.userId === appointment.clientId;
+  const managesStaff = actor.role === "STAFF" && actor.staffProfileId === appointment.staffProfileId;
+  const isAdmin = actor.role === "ADMIN";
+
+  if (!ownsIt && !managesStaff && !isAdmin) {
+    throw new ForbiddenAppError("You cannot cancel another user's appointment");
+  }
+}
+
+export async function listAppointments(actor: RequestActor) {
+  return listAppointmentsForActor(actor);
+}
+
+export async function bookAppointment(
+  actor: RequestActor,
+  input: {
+    staffProfileId: string;
+    startsAt: Date;
+  },
+) {
+  requireRole(actor, ["CLIENT"]);
+
+  const staff = await findStaffProfileById(input.staffProfileId);
+  if (!staff) {
+    throw new NotFoundAppError("Staff profile not found");
+  }
+
+  const startsAt = new Date(input.startsAt);
+  const endsAt = new Date(startsAt.getTime() + staff.appointmentDurationMinutes * 60 * 1000);
+
+  if (Number.isNaN(startsAt.getTime())) {
+    throw new ValidationAppError("The requested start time is invalid");
+  }
+
+  if (startsAt.getTime() <= Date.now()) {
+    throw new ValidationAppError("Appointments must be booked in the future");
+  }
+
+  const isOpen = await canBookSlot(actor, staff.id, startsAt, endsAt);
+  if (!isOpen) {
+    throw new ConflictAppError("That slot is not available");
+  }
+
+  const conflict = await findConflictingAppointment({
+    staffProfileId: staff.id,
+    startsAt,
+    endsAt,
+  });
+
+  if (conflict) {
+    throw new ConflictAppError("That slot was just taken");
+  }
+
+  // SENIOR NOTE: the database exclusion constraint is the last line of defense against concurrent double-booking.
+  try {
+    return await createAppointment({
+      staffProfileId: staff.id,
+      clientId: actor.userId,
+      startsAt,
+      endsAt,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Appointment_staffProfileId_time_window_excl") || message.toLowerCase().includes("conflict")) {
+      throw new ConflictAppError("That slot was just taken");
+    }
+
+    throw error;
+  }
+}
+
+export async function cancelAppointment(
+  actor: RequestActor,
+  appointmentId: string,
+  input: {
+    cancellationReason?: string;
+  },
+) {
+  const appointment = await findAppointmentById(appointmentId);
+  ensureCancelable(actor, appointment);
+
+  if (!appointment) {
+    throw new NotFoundAppError("Appointment not found");
+  }
+
+  if (appointment.status === "CANCELLED") {
+    throw new InvalidTransitionAppError("Cancelled appointments cannot be cancelled again");
+  }
+
+  return cancelAppointmentRecord({
+    appointmentId,
+    cancellationReason: input.cancellationReason,
+  });
+}
+
+export async function getAppointment(actor: RequestActor, appointmentId: string) {
+  const appointment = await findScopedAppointmentById(actor, appointmentId);
+  if (!appointment) {
+    throw new NotFoundAppError("Appointment not found");
+  }
+
+  return appointment;
+}

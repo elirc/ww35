@@ -1,0 +1,171 @@
+// Availability calendar service and admin-managed working hours.
+// What calls this file: availability routes and appointment booking validation.
+// What it calls: staff/availability repositories and the shared slot calculator.
+// Junior pitfall: returning all slots without filtering out time-off or booked ranges.
+
+import { ConflictAppError, NotFoundAppError } from "@/lib/errors";
+import { buildAvailabilitySlots, isSlotOpen, validateTimeWindow } from "@/lib/availability/schedule";
+import { requireRole } from "@/lib/auth/permissions";
+import { createStaffProfile, findStaffProfileById, listStaffProfiles } from "@/repositories/staffRepository";
+import {
+  createWorkingHoursRule,
+  createTimeOffBlock,
+  listTimeOffBlocks,
+  listWorkingHoursRules,
+} from "@/repositories/availabilityRepository";
+import type { AvailabilitySlot, RequestActor } from "@/types/domain";
+import { listAppointmentsInWindow } from "@/repositories/appointmentRepository";
+import { createUser, findUserByEmail } from "@/repositories/userRepository";
+
+export async function listStaff() {
+  return listStaffProfiles();
+}
+
+export async function createStaffMember(
+  actor: RequestActor,
+  input: {
+    email: string;
+    name: string;
+    displayName: string;
+    timezone: string;
+    appointmentDurationMinutes: number;
+    passwordHash: string;
+  },
+) {
+  requireRole(actor, ["ADMIN"]);
+  const existing = await findUserByEmail(input.email);
+  if (existing) {
+    throw new ConflictAppError("A user with this email already exists");
+  }
+
+  let user;
+  try {
+    user = await createUser({
+      email: input.email,
+      name: input.name,
+      role: "STAFF",
+      passwordHash: input.passwordHash,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.toLowerCase().includes("unique") || message.includes("User_email_key")) {
+      throw new ConflictAppError("A user with this email already exists");
+    }
+
+    throw error;
+  }
+
+  const staffProfile = await createStaffProfile({
+    userId: user.id,
+    displayName: input.displayName,
+    timezone: input.timezone,
+    appointmentDurationMinutes: input.appointmentDurationMinutes,
+  });
+
+  return { user, staffProfile };
+}
+
+export async function createWorkingHours(
+  actor: RequestActor,
+  input: {
+    staffProfileId: string;
+    dayOfWeek: number;
+    startMinute: number;
+    endMinute: number;
+    active?: boolean;
+  },
+) {
+  requireRole(actor, ["ADMIN"]);
+
+  const staff = await findStaffProfileById(input.staffProfileId);
+  if (!staff) {
+    throw new NotFoundAppError("Staff profile not found");
+  }
+
+  return createWorkingHoursRule(input);
+}
+
+export async function createTimeOff(
+  actor: RequestActor,
+  input: {
+    staffProfileId: string;
+    startsAt: Date;
+    endsAt: Date;
+    reason?: string | null;
+  },
+) {
+  requireRole(actor, ["ADMIN"]);
+
+  const staff = await findStaffProfileById(input.staffProfileId);
+  if (!staff) {
+    throw new NotFoundAppError("Staff profile not found");
+  }
+
+  return createTimeOffBlock(input);
+}
+
+export async function getStaffAvailability(
+  _actor: RequestActor,
+  input: {
+    staffProfileId: string;
+    from: Date;
+    to: Date;
+  },
+): Promise<AvailabilitySlot[]> {
+  validateTimeWindow({ startsAt: input.from, endsAt: input.to });
+  const staff = await findStaffProfileById(input.staffProfileId);
+  if (!staff) {
+    throw new NotFoundAppError("Staff profile not found");
+  }
+
+  const workingHoursRules = await listWorkingHoursRules(input.staffProfileId);
+  const timeOffBlocks = await listTimeOffBlocks(input.staffProfileId, input.from, input.to);
+  const bookedAppointments = await listAppointmentsInWindow(input.staffProfileId, input.from, input.to);
+
+  const blockedWindows = [
+    ...timeOffBlocks.map((block) => ({ startsAt: block.startsAt, endsAt: block.endsAt })),
+    ...bookedAppointments.map((appointment) => ({ startsAt: appointment.startsAt, endsAt: appointment.endsAt })),
+  ];
+
+  const slotMinutes = staff.appointmentDurationMinutes;
+  const slots = buildAvailabilitySlots({
+    startsAt: input.from,
+    endsAt: input.to,
+    timezone: staff.timezone,
+    slotMinutes,
+    workingHoursRules,
+    blockedWindows,
+  });
+
+  // SENIOR NOTE: availability is computed on demand from rules plus booked ranges so it cannot drift from the source of truth.
+  return slots.map((slot) => ({
+    startsAt: slot.startsAt.toISOString(),
+    endsAt: slot.endsAt.toISOString(),
+    isOpen: slot.isOpen,
+    reason: slot.reason ?? undefined,
+  }));
+}
+
+export async function canBookSlot(actor: RequestActor, staffProfileId: string, startsAt: Date, endsAt: Date) {
+  void actor;
+  const staff = await findStaffProfileById(staffProfileId);
+  if (!staff) {
+    throw new NotFoundAppError("Staff profile not found");
+  }
+
+  const workingHoursRules = await listWorkingHoursRules(staffProfileId);
+  const timeOffBlocks = await listTimeOffBlocks(staffProfileId, startsAt, endsAt);
+  const bookedAppointments = await listAppointmentsInWindow(staffProfileId, startsAt, endsAt);
+
+  return isSlotOpen(
+    { startsAt, endsAt },
+    {
+      timezone: staff.timezone,
+      workingHoursRules,
+      blockedWindows: [
+        ...timeOffBlocks.map((block) => ({ startsAt: block.startsAt, endsAt: block.endsAt })),
+        ...bookedAppointments.map((appointment) => ({ startsAt: appointment.startsAt, endsAt: appointment.endsAt })),
+      ],
+    },
+  );
+}

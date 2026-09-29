@@ -1,0 +1,19 @@
+// Shared route wrapper for consistent API error handling.
+// What calls this file: all route handler exports under src/app/api.
+// What it calls: errorResponse from src/lib/http.ts.
+// Junior pitfall: letting one route throw a stack trace while the rest return structured JSON.
+
+import type { NextRequest } from "next/server";
+import { errorResponse } from "@/lib/http";
+
+export function apiRoute<TContext = Record<string, string | string[]>>(
+  handler: (request: NextRequest, context: { params: TContext }) => Promise<Response>,
+) {
+  return async (request: NextRequest, context: { params: TContext }) => {
+    try {
+      return await handler(request, context);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  };
+}

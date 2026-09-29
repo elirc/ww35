@@ -1,0 +1,126 @@
+// Time-slot evaluation for staff calendars and booking checks.
+// What calls this file: availabilityService and appointmentService.
+// What it calls: nothing; it stays pure so the rules are easy to test.
+// Junior pitfall: treating working hours as if they were timezone-free when the UI is not.
+
+type TimeWindow = {
+  startsAt: Date;
+  endsAt: Date;
+};
+
+type WorkingHoursRuleLike = {
+  dayOfWeek: number;
+  startMinute: number;
+  endMinute: number;
+  active: boolean;
+};
+
+type CalendarWindow = TimeWindow & {
+  timezone: string;
+  slotMinutes: number;
+  workingHoursRules: WorkingHoursRuleLike[];
+  blockedWindows: TimeWindow[];
+};
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+function getZonedParts(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+
+  return {
+    weekday: get("weekday") as (typeof DAY_NAMES)[number],
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+    dateKey: `${get("year")}-${get("month")}-${get("day")}`,
+  };
+}
+
+function getLocalDayIndex(date: Date, timeZone: string) {
+  const weekday = getZonedParts(date, timeZone).weekday;
+  return DAY_NAMES.indexOf(weekday);
+}
+
+function getLocalMinuteOfDay(date: Date, timeZone: string) {
+  const parts = getZonedParts(date, timeZone);
+  return parts.hour * 60 + parts.minute;
+}
+
+function overlaps(left: TimeWindow, right: TimeWindow) {
+  return left.startsAt < right.endsAt && left.endsAt > right.startsAt;
+}
+
+function isWithinWorkingHours(
+  slot: TimeWindow,
+  timeZone: string,
+  workingHoursRules: WorkingHoursRuleLike[],
+) {
+  const localDayIndex = getLocalDayIndex(slot.startsAt, timeZone);
+  const localStart = getLocalMinuteOfDay(slot.startsAt, timeZone);
+  const localEnd = getLocalMinuteOfDay(slot.endsAt, timeZone);
+
+  return workingHoursRules.some((rule) => {
+    if (!rule.active || rule.dayOfWeek !== localDayIndex) {
+      return false;
+    }
+
+    return localStart >= rule.startMinute && localEnd <= rule.endMinute;
+  });
+}
+
+export function isSlotOpen(
+  slot: TimeWindow,
+  window: Pick<CalendarWindow, "timezone" | "workingHoursRules" | "blockedWindows">,
+) {
+  if (!isWithinWorkingHours(slot, window.timezone, window.workingHoursRules)) {
+    return false;
+  }
+
+  return !window.blockedWindows.some((blocked) => overlaps(slot, blocked));
+}
+
+export function buildAvailabilitySlots(window: CalendarWindow) {
+  const slots: Array<TimeWindow & { isOpen: boolean; reason: string | null }> = [];
+  let cursor = new Date(window.startsAt);
+
+  while (cursor < window.endsAt) {
+    const slot = {
+      startsAt: new Date(cursor),
+      endsAt: new Date(cursor.getTime() + window.slotMinutes * 60 * 1000),
+    };
+
+    if (slot.endsAt > window.endsAt) {
+      break;
+    }
+
+    const open = isSlotOpen(slot, window);
+
+    slots.push({
+      ...slot,
+      isOpen: open,
+      reason: open ? null : "blocked",
+    });
+
+    cursor = new Date(cursor.getTime() + window.slotMinutes * 60 * 1000);
+  }
+
+  return slots;
+}
+
+export function getSlotWindowLabel(slot: TimeWindow, timeZone: string) {
+  const start = getZonedParts(slot.startsAt, timeZone);
+  const end = getZonedParts(slot.endsAt, timeZone);
+  return `${start.dateKey} ${String(start.hour).padStart(2, "0")}:${String(start.minute).padStart(2, "0")} - ${String(end.hour).padStart(2, "0")}:${String(end.minute).padStart(2, "0")}`;
+}

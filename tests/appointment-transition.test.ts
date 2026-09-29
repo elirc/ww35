@@ -1,0 +1,50 @@
+import { describe, expect, it, vi } from "vitest";
+import { InvalidTransitionAppError } from "@/lib/errors";
+
+vi.mock("@/repositories/appointmentRepository", () => ({
+  findScopedAppointmentById: vi.fn(async () => ({
+    id: "appt_1",
+    staffProfileId: "staff_1",
+    clientId: "client_1",
+    startsAt: new Date("2026-04-14T18:00:00.000Z"),
+    endsAt: new Date("2026-04-14T18:30:00.000Z"),
+    status: "CANCELLED",
+    cancellationReason: "Already cancelled",
+    cancelledAt: new Date("2026-04-14T18:01:00.000Z"),
+  })),
+  listAppointmentsForActor: vi.fn(),
+  findConflictingAppointment: vi.fn(),
+  createAppointment: vi.fn(),
+  cancelAppointment: vi.fn(),
+  listAppointmentsInWindow: vi.fn(),
+}));
+
+vi.mock("@/repositories/staffRepository", () => ({
+  findStaffProfileById: vi.fn(),
+}));
+
+vi.mock("@/services/availabilityService", () => ({
+  canBookSlot: vi.fn(),
+}));
+
+import { cancelAppointment } from "@/services/appointmentService";
+
+describe("appointment transition", () => {
+  it("rejects cancelling an appointment that is already cancelled", async () => {
+    // This prevents duplicate cancellation writes and makes the status machine explicit.
+    await expect(
+      cancelAppointment(
+        {
+          sessionId: "session_1",
+          userId: "client_1",
+          email: "client@acme.test",
+          name: "Client",
+          role: "CLIENT",
+          staffProfileId: null,
+        },
+        "appt_1",
+        {},
+      ),
+    ).rejects.toBeInstanceOf(InvalidTransitionAppError);
+  });
+});
