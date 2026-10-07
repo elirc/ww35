@@ -21,3 +21,16 @@ Why this split matters:
 - `src/lib/data/appointmentScopes.ts` keeps owner scoping central so the same filter is reused everywhere.
 
 If multi-tenancy is added later, the first places to change would be `prisma/schema.prisma`, `src/lib/data/appointmentScopes.ts`, `src/repositories/*.ts`, and `src/services/authService.ts`.
+
+## Three layers of overlap protection
+
+1. Preview and booking share `isSlotOpen` (`src/lib/availability/schedule.ts:99-110`), which treats time off and booked
+   appointments as blocked windows.
+2. `bookAppointment` re-reads conflicting `BOOKED` rows (`src/services/appointmentService.ts:54-62`).
+3. The database exclusion constraint in `prisma/migrations/0001_initial/migration.sql` rejects concurrent overlapping
+   inserts; the service translates only that named violation into a 409 (lines 72-75).
+
+Only the third is race-safe. The first two give better messages.
+
+**Exercise — Goal:** find each layer. **Check:** open the migration and locate the exclusion constraint; state which
+appointment status it applies to (`BOOKED`) and why cancelled rows free the slot.

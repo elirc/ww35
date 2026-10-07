@@ -12,6 +12,27 @@ Provider error translation requires both the Prisma error type and the specific 
 
 Reviewers should inspect the actual repository call, the service's scoped lookup, the formatter options and the SQL migration together. These pieces implement different parts of the contract. Preserving one while bypassing another can still produce an inconsistent calendar or an unauthorized state change.
 
+## Solutions to the additional exercises
+
+6. The grid starts at the caller's `from` (line 119) and steps by the appointment duration (`availabilityService.ts:130`),
+   so different `from` values produce different grids.
+7. `createUser` (line 43) then `createStaffProfile` (58). If the second fails, a `STAFF` user with no profile remains; there
+   is no transaction.
+8. A reasonable rule is "only before `startsAt`" for clients; enforce it in `cancelAppointment` after the scoped read
+   (around line 98), or put `startsAt: { gt: now }` into the conditional `updateMany` so it is race-safe.
+
+## Senior-review findings outside the completed change
+
+1. **Bookings are not grid-aligned** — `bookAppointment` (19-79) accepts any future start that fits; preview slots are anchored
+   to the caller's `from` (`schedule.ts:119`). Odd starts fragment a staff calendar.
+2. **Past appointments can be cancelled** — no time check in `cancelAppointment` or the `updateMany` predicate.
+3. **Staff creation is not atomic** — `availabilityService.ts:41-63`.
+4. **Unique detection by message text** — `availabilityService.ts:50-52` matches `"unique"` or `User_email_key` in the message,
+   the same fragility the appointment path avoids with typed metadata.
+5. **Single "blocked" reason** — `schedule.ts:136`; the UI cannot tell "outside hours" from "already booked".
+6. **Overlapping working-hours rules are accepted** — `createWorkingHours` (`availabilityService.ts:68-86`) does not check for
+   duplicates; harmless for `some()` matching, but it hides configuration mistakes.
+
 ## Source excerpt
 
 From [src/lib/data/appointmentErrors.ts](../src/lib/data/appointmentErrors.ts).

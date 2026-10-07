@@ -12,6 +12,31 @@ Existing permission, schema and isolation tests remain in the full suite. The or
 
 When debugging, first identify which boundary failed. A malformed Date belongs to validation, a false isOpen may be a valid business result, and a Prisma query shape failure belongs to persistence scope. Inspect the accepted command log and runner total in VERIFICATION. Mocked tests prove orchestration and predicates; they are not evidence that the migration was applied or that PostgreSQL rejected two simultaneous inserts in this environment.
 
+## Test inventory (by `it(` location)
+
+| File | Lines | Focus |
+|---|---|---|
+| `tests/calendar-boundaries.test.ts` | 7, 11, 16, 21, 30, 35 | overnight wrap, exact midnight, DST date boundary, half-open overlap, malformed inputs, preview/booking agreement |
+| `tests/appointment-boundaries.test.ts` | 13, 17, 21, 24, 32 | scoped read first, normalized reason, stale write -> conflict, direct validation, exclusion-error translation |
+| `tests/appointment-repository.test.ts` | 10, 11 | loser has no follow-up read; detail read is scoped |
+| `tests/route-boundaries.test.ts` | 10, 11 | params awaited; 400 before service; 401 without session |
+| `tests/appointment-transition.test.ts` | 33 | already-cancelled rejection |
+| `tests/auth-permissions.test.ts` | 25 | client on admin route -> 403 |
+| `tests/data-isolation.test.ts` | 6 | client query scope |
+| `tests/validation-boundary.test.ts` | 5 | working-hours end before start |
+
+The recorded run counts 33 tests; some `it` blocks may expand, so the table lists locations.
+
+## Gaps
+
+- No test for `createStaffMember` partial failure (user created, staff profile fails; `availabilityService.ts:41-63` is not
+  transactional).
+- No test for the message-based unique detection at `availabilityService.ts:50-52`.
+- No live PostgreSQL test of the exclusion constraint.
+
+**Exercise — Goal:** write a gap test. **Check:** mock `createStaffProfile` to throw after `createUser` succeeds and assert that a
+STAFF user now exists without a profile — then decide where a transaction belongs.
+
 ## Source excerpt
 
 From [tests/calendar-boundaries.test.ts](../tests/calendar-boundaries.test.ts).

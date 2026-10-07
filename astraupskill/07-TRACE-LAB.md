@@ -10,6 +10,23 @@ Now trace the successful path in isolation. updateMany affects one row. The repo
 
 Finish with a foreign client. The first scoped lookup returns null, so the flow ends with not found before status inspection or mutation. Compare that with an assigned staff actor and an administrator by inspecting their repository where objects. The exercise demonstrates why role permission, resource scope, lifecycle status and conditional mutation are separate checks that all belong in the completed path.
 
+## Trace table — booking a slot (`src/services/appointmentService.ts`)
+
+| Step | Lines | Failure |
+|---|---|---|
+| role CLIENT | 26 | 403 |
+| command parse | 28-30 | 400 |
+| staff exists | 31-34 | 404 |
+| stored duration 1..1440 | 36-37 | 400 |
+| interval finite | 41-43 | 400 |
+| in the future | 45-47 | 400 |
+| working hours, time off, booked (preview predicate) | 49-52 | 409 "That slot is not available" |
+| overlapping BOOKED row | 54-62 | 409 "That slot was just taken" |
+| insert | 65-71 | exclusion violation -> 409; other errors propagate |
+
+**Exercise — Goal:** order the 409s. **Check:** explain why the conflict read at 54-62 can still be beaten by a concurrent insert,
+and which line catches that case (73-75).
+
 ## Source excerpt
 
 From [tests/appointment-repository.test.ts](../tests/appointment-repository.test.ts).

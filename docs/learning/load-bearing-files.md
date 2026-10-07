@@ -55,3 +55,17 @@ What calls it: `src/hooks/useStaff.ts` and `src/components/BookingDashboard.tsx`
 What it calls: `src/lib/auth/with-role.ts`, `src/lib/validation/appointmentSchemas.ts`, and `src/services/availabilityService.ts`.
 What would break if it were wrong: the application would create staff records without permission checks or validation.
 What a junior engineer would likely miswrite here: creating the user row in the route instead of delegating to the service.
+Current gap: `createStaffMember()` writes the user and then the staff profile without a transaction (`src/services/availabilityService.ts:41-63`), and detects duplicate emails by matching error message text (lines 50-52).
+
+## Load-bearing lines (quick index)
+
+| File | Line(s) | Why |
+|---|---|---|
+| `src/lib/availability/schedule.ts` | 81-86 | Cross-date endpoints allowed only at the exact closing midnight |
+| `src/lib/availability/schedule.ts` | 88 | Folded local clocks rejected |
+| `src/lib/data/appointmentScopes.ts` | 13-16 | Impossible staff id instead of an unscoped query |
+| `src/repositories/appointmentRepository.ts` | 155 | Conditional cancel: id + scope + `BOOKED` |
+| `src/services/appointmentService.ts` | 72-75 | Only the named exclusion violation becomes "slot taken" |
+
+**Exercise — Goal:** predict a regression. **Check:** if line 155 dropped `status: "BOOKED"`, describe what a second concurrent cancel
+would do (overwrite the first reason and timestamp).

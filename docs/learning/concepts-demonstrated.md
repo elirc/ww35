@@ -54,3 +54,13 @@ Risk if wrong: admin and booking changes become hard to investigate after the fa
 Where to look: not implemented in this codebase.
 Also see: `src/services/appointmentService.ts` for the synchronous workflow that would be the first candidate for async follow-up work later.
 Risk if wrong: the app would promise reminders or sync jobs without an actual queue boundary.
+
+## Conditional writes for one-winner transitions
+Where to look: `src/repositories/appointmentRepository.ts:150-160` — `updateMany` with the current status in the `where`.
+Also see: `tests/appointment-repository.test.ts:10` for the losing-writer case.
+Risk if wrong: two concurrent cancellations both succeed and the second overwrites the first reason and timestamp.
+
+## Local calendar days versus instants
+Where to look: `src/lib/availability/schedule.ts:29-50` (`getZonedParts` with `hourCycle: "h23"`) and 71-97.
+Also see: `tests/calendar-boundaries.test.ts:16` for a DST date boundary.
+Risk if wrong: appointments that cross midnight appear to fit daytime rules.

@@ -10,6 +10,22 @@ The validation module contains both the HTTP string schema and a Date-based comm
 
 Finally, inspect prisma/migrations/0001_initial/migration.sql. Its btree_gist extension and exclusion constraint encode overlap protection beyond the Prisma model. Applying db push is not equivalent to running this hand-written migration. Keep the SQL file with the schema when preparing a development database, and do not infer migration execution from passing mocked tests.
 
+## Line-level map
+
+| Concern | Location |
+|---|---|
+| Book | `src/services/appointmentService.ts:19-79` — client role (26), parse (28-30), staff lookup (31-34), stored duration check (36-37), interval (38-43), future-only (45-47), `canBookSlot` (49-52), conflict read (54-62), create with exclusion translation (65-78) |
+| Cancel | `appointmentService.ts:81-108` — role (88), parse (89-91), scoped read (92-96), terminal check (98-100), conditional write (102-106) |
+| Scope predicates | `src/lib/data/appointmentScopes.ts:8-19` — ADMIN `{}`, STAFF `staffProfileId` (or an impossible id), CLIENT `clientId` |
+| Conditional cancel | `src/repositories/appointmentRepository.ts:150-160` — `updateMany` on id + scope + `status: "BOOKED"`; `count !== 1` returns `null` |
+| Local-day check | `src/lib/availability/schedule.ts:71-97` |
+| Preview grid | `schedule.ts:112-143`, called by `src/services/availabilityService.ts:107-147` |
+| Session cookie | `src/lib/auth/session.ts:8-27` — `appointment_session`, SHA-256 hashed 32-byte token, 7 days |
+| Auth wrapper | `src/lib/auth/with-auth.ts:18-33` — awaits Promise params, 401 without an actor |
+
+**Exercise — Goal:** find the one unscoped read. **Check:** locate `findAppointmentById` (`appointmentRepository.ts:10-32`) and confirm by
+search that no service calls it any more — the cancellation path uses `findScopedAppointmentById` (line 92).
+
 ## Source excerpt
 
 From [src/repositories/appointmentRepository.ts](../src/repositories/appointmentRepository.ts).

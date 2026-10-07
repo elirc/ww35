@@ -14,6 +14,11 @@ The scheduling policy is single-local-day working hours with an exact closing-mi
 
 [README](README.md) / [01-CODEBASE-MAP](01-CODEBASE-MAP.md) / [02-CONCEPTS](02-CONCEPTS.md) / [03-WORKED-CHANGE](03-WORKED-CHANGE.md) / [04-TESTING-AND-DEBUGGING](04-TESTING-AND-DEBUGGING.md) / [05-PRACTICE](05-PRACTICE.md) / [06-SOLUTIONS-AND-REVIEW](06-SOLUTIONS-AND-REVIEW.md) / [07-TRACE-LAB](07-TRACE-LAB.md) / [VERIFICATION](VERIFICATION.md)
 
+## Note on the evidence links
+
+Only the four `.json` records are present in `evidence/` in this repository; the `.log` files linked below are not included
+and those links do not resolve here. Treat the records as historical and re-run the commands before relying on them.
+
 ## Recorded command evidence
 
 The full suite passed **33 tests**. Counts refer to tests, not commands.

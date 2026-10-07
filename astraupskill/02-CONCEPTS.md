@@ -10,6 +10,26 @@ Overlap uses half-open semantics: a meeting ending at 10:00 may sit immediately 
 
 Validation is separate from availability. An increasing, well-formed interval can legitimately be unavailable. A zero step or invalid timestamp is malformed and should fail promptly, never produce an infinite loop or an apparently valid empty preview. Keeping those outcomes distinct makes both API behavior and tests easier to interpret.
 
+## The algorithm, line by line (`src/lib/availability/schedule.ts:71-97`)
+
+1. Lines 76-77 format both endpoints in the staff timezone (`getZonedParts`, 29-50, with `hourCycle: "h23"`).
+2. Lines 79-80 compute local minutes including seconds and milliseconds.
+3. Lines 81-86: if the local dates differ, the end is accepted only if it is exactly local midnight **and** the instant one
+   millisecond earlier is still on the start date; then `localEnd` becomes 1440.
+4. Line 88 rejects intervals whose local end is not after the local start (folded clocks).
+5. Lines 90-96: some active rule for the start weekday must contain `[localStart, localEnd]`.
+
+## What the grid does and does not promise
+
+`buildAvailabilitySlots` (112-143) steps from the caller's `from` instant in increments of the staff's appointment
+duration (`availabilityService.ts:130`). The grid is therefore anchored to whatever `from` the client sends, not to the
+start of working hours. `bookAppointment` does not require the requested start to be on that grid: any future start whose
+whole interval fits working hours and is free can be booked. And every closed slot gets `reason: "blocked"` (line 136),
+whether it is outside working hours, in time off, or already booked.
+
+**Exercise — Goal:** test the anchor. **Check:** with a 9:00-17:00 rule and 60-minute appointments, request availability from
+09:30 local; state the first slot (09:30-10:30) and whether a direct booking at 09:15 is accepted (yes, if free).
+
 ## Source excerpt
 
 From [src/lib/availability/schedule.ts](../src/lib/availability/schedule.ts).

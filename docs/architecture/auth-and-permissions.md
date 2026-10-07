@@ -29,3 +29,23 @@ No multi-tenancy is included. If the product later needs org boundaries, the cha
 - Add tenant filters to `src/lib/data/appointmentScopes.ts`.
 - Update every repository query in `src/repositories/*.ts` to include `tenantId` alongside the ownership filter.
 - Add tenant-aware tests for a cross-tenant leak.
+
+## Scope predicates (`src/lib/data/appointmentScopes.ts:8-19`)
+
+| Role | Appointment `where` |
+|---|---|
+| ADMIN | `{}` (all) |
+| STAFF | `{ staffProfileId }`, or the impossible id `__missing_staff_profile__` when the actor has none |
+| CLIENT | `{ clientId: userId }` |
+
+The same predicate is applied to list reads, detail reads (`findScopedAppointmentById`) and the conditional cancellation write
+(`appointmentRepository.ts:155`), so a foreign appointment returns 404 rather than revealing its status.
+
+## Review notes
+
+- `getStaffAvailability` ignores its actor (`src/services/availabilityService.ts:107-114`): any signed-in user can read any staff
+  member's open and blocked slots. That is probably intended for a booking app, but it is a deliberate exposure of busy times.
+- Staff can cancel any appointment on their own calendar, including past ones; no role is limited by time.
+
+**Exercise — Goal:** confirm the fallback. **Check:** for a STAFF actor whose `staffProfileId` is undefined, state the `where` clause
+and the number of rows it can match (none).

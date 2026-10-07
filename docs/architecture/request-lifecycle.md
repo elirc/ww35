@@ -17,8 +17,8 @@ Request: client cancels their own appointment
 3. `src/app/api/appointments/[appointmentId]/cancel/route.ts` - `POST` validates the cancellation payload.
 4. `src/lib/http/request.ts` - `readJsonBody()` parses the JSON payload.
 5. `src/lib/auth/with-auth.ts` - the session is checked before any update logic runs.
-6. `src/services/appointmentService.ts` - `cancelAppointment()` loads the appointment and checks the transition.
-7. `src/repositories/appointmentRepository.ts` - `findAppointmentById()` and `cancelAppointment()` perform the read/update.
+6. `src/services/appointmentService.ts` - `cancelAppointment()` parses the fields, loads the appointment through `findScopedAppointmentById()` (actor-scoped, line 92), and rejects an already-cancelled row (98-100).
+7. `src/repositories/appointmentRepository.ts` - `cancelAppointment()` runs `updateMany` on id + actor scope + `status: "BOOKED"` (lines 150-160); a count of 0 becomes a 409 `ConflictAppError` in the service (line 106). The unscoped `findAppointmentById()` is no longer used on this path.
 8. Returns `200` with `{ appointment }`.
 
 Request: admin creates a staff member

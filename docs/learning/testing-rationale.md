@@ -51,3 +51,23 @@ What a more thorough suite would add:
 
 - A repository-level integration test against a real Prisma client and a temporary PostgreSQL database.
 - A staff scoping test showing the `staffProfileId` filter is always present.
+
+## Tests added with the calendar and cancellation work
+
+- `tests/calendar-boundaries.test.ts` — six pure-function cases (lines 7, 11, 16, 21, 30, 35): overnight wrap, exact midnight with
+  `endMinute` 1440, a DST date boundary, half-open adjacency, malformed inputs, and preview/booking agreement.
+- `tests/appointment-boundaries.test.ts` — five service cases (13, 17, 21, 24, 32) with mocked repositories.
+- `tests/appointment-repository.test.ts` — the real repository `where` clauses against a mocked Prisma client (10, 11); line 11
+  covers the staff/client scoping suggested above for detail reads.
+- `tests/route-boundaries.test.ts` — the real cancel route: awaited params, 400 before the service, 401 without a session.
+
+## Still missing
+
+| Test | Would expose | Location |
+|---|---|---|
+| Cancel a finished appointment | Allowed today | `src/services/appointmentService.ts:81-108` |
+| Profile creation fails after user creation | Orphan STAFF user | `src/services/availabilityService.ts:41-63` |
+| Live overlapping inserts against the real migration | Proves the exclusion constraint | `prisma/migrations/0001_initial/migration.sql` |
+
+**Exercise — Goal:** write the first one. **Check:** mock a scoped appointment with `startsAt` in the past and `status: "BOOKED"`;
+assert today's behaviour (success) and write the assertion you would want instead.

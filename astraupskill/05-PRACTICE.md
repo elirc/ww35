@@ -10,6 +10,25 @@ Exercise four: simulate a BOOKED scoped read followed by an updateMany result wi
 
 Exercise five: create a typed Prisma P2004 error for a different constraint and a plain network error containing the word conflict. Neither should become a slot-taken response. Finally write an integration-test plan for a disposable PostgreSQL database that applies the real migration and races overlapping inserts. Keep that proposed evidence separate from the mocked checks already recorded here.
 
+## Goals and Checks
+
+1. **Goal:** reject overnight wraps. **Check:** `isSlotOpen` returns `false` for 23:30-00:30 against 09:00-17:00, `true` for
+   23:00-24:00 against a rule ending at 1440, and `false` for an end one millisecond past midnight.
+2. **Goal:** reason about DST. **Check:** you name the UTC instant of the next local midnight from the formatter, not from
+   `+24h`, and the 30-minute extension returns `false`.
+3. **Goal:** half-open overlap. **Check:** adjacent intervals are open; overlap by one minute is closed (`schedule.ts:67-69`).
+4. **Goal:** stale-loser behaviour. **Check:** one `updateMany` call, no `findFirst` afterwards, `ConflictAppError` raised.
+5. **Goal:** narrow error mapping. **Check:** only the typed P2004 naming the exclusion constraint maps to "slot taken".
+
+## Additional exercises
+
+6. **Goal:** find the grid anchor. **Check:** explain why two clients asking for availability from 09:00 and 09:20 see
+   different slot lists for the same staff member (`schedule.ts:119-140`).
+7. **Goal:** find the orphan path. **Check:** list the writes in `createStaffMember` (`availabilityService.ts:24-66`) and
+   say what remains if the second one fails.
+8. **Goal:** past cancellations. **Check:** decide whether a client should be able to cancel a finished appointment and name
+   the line where you would enforce it.
+
 ## Course navigation
 
 [README](README.md) / [01-CODEBASE-MAP](01-CODEBASE-MAP.md) / [02-CONCEPTS](02-CONCEPTS.md) / [03-WORKED-CHANGE](03-WORKED-CHANGE.md) / [04-TESTING-AND-DEBUGGING](04-TESTING-AND-DEBUGGING.md) / [05-PRACTICE](05-PRACTICE.md) / [06-SOLUTIONS-AND-REVIEW](06-SOLUTIONS-AND-REVIEW.md) / [07-TRACE-LAB](07-TRACE-LAB.md) / [VERIFICATION](VERIFICATION.md)

@@ -83,3 +83,12 @@
 **What to look for:** The query hooks and mutation invalidation.
 **What to trace:** It drives `src/hooks/useAppointments.ts`, `src/hooks/useAvailability.ts`, `src/hooks/useStaff.ts`, and `src/hooks/useAuth.ts`.
 **What a junior would likely miss:** Treating local React state as the source of truth for appointments.
+
+## Checkpoints added with the calendar and cancellation work
+
+- **Schedule.** **Goal:** read `src/lib/availability/schedule.ts:71-97`. **Check:** explain why a 23:30-00:30 appointment fails against
+  a 09:00-17:00 rule even though its end minute (30) is small.
+- **Grid.** **Goal:** read `schedule.ts:112-143`. **Check:** state what the grid is anchored to (the caller's `from`).
+- **Cancellation.** **Goal:** read `appointmentService.ts:81-108` with `appointmentRepository.ts:150-160`. **Check:** list the three
+  conditions in the `updateMany` `where` and what a zero count becomes.
+- **Errors.** **Goal:** read `src/lib/data/appointmentErrors.ts`. **Check:** say which Prisma error type and metadata must both match.

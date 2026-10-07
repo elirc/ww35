@@ -10,6 +10,28 @@ Access is also checked in the correct order. The first lookup is findScopedAppoi
 
 The tests inspect these real repository arguments for client, assigned staff, missing staff profile and administrator. Service tests separately prove that unrestricted lookup is never called, reasons are normalized, the response comes from the successful repository operation, and a stale loser makes only one write attempt. This combination verifies the actual boundary wiring while remaining honest that no live database race was executed.
 
+## Before and after, by snapshot
+
+The before-states are in `snapshots/` (for example `src__services__appointmentService.ts.original.txt`,
+`src__repositories__appointmentRepository.ts.original.txt`, `src__lib__availability__schedule.ts.original.txt`). The
+current lines that embody the change:
+
+- scoped read first — `src/services/appointmentService.ts:92`;
+- conditional write — `src/repositories/appointmentRepository.ts:154-158`;
+- null -> 409 — `appointmentService.ts:106`;
+- response read keeps scope — `appointmentRepository.ts:159`.
+
+## What the change leaves open
+
+- **No time rule on cancellation.** A client can cancel an appointment that already happened; nothing compares `startsAt`
+  with the current time in `cancelAppointment` (81-108).
+- **Staff cancel any of their appointments** with no reason required; the reason is optional for every role
+  (`cancelAppointmentSchema` is applied at line 89).
+
+**Exercise — Goal:** reproduce the race on paper. **Check:** write the two interleaved timelines and mark which request's
+`updateMany` returns `count: 1` and which returns `count: 0`; the loser's service call ends at line 106 with
+`ConflictAppError`.
+
 ## Source excerpt
 
 From [src/services/appointmentService.ts](../src/services/appointmentService.ts).

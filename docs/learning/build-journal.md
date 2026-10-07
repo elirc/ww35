@@ -76,3 +76,19 @@ Reviewer focus:
 - `tests/appointment-transition.test.ts` around invalid cancellation.
 - `docs/learning/flow-traces.md` around the request order and exact file paths.
 Junior reviewer blind spot: assuming docs are accurate without checking they reference the actual generated functions and files.
+
+## Later work — local-day boundaries and one-winner cancellation
+
+Purpose: reject cross-midnight intervals that only looked like daytime, and make cancellation actor-scoped and conditional on
+`BOOKED`. Files: `src/lib/availability/schedule.ts`, `src/services/appointmentService.ts`,
+`src/repositories/appointmentRepository.ts`, `src/lib/data/appointmentErrors.ts`, plus four new test files. Before-states are in
+`astraupskill/snapshots/`.
+
+## Open decisions found during doc review
+
+- Should bookings be restricted to the preview grid? Today any fitting start is accepted.
+- Should clients be able to cancel finished appointments?
+- Should staff creation be transactional?
+
+**Exercise — Goal:** write a decision record. **Check:** draft one of the three with two options and a con each grounded in the cited
+files.
